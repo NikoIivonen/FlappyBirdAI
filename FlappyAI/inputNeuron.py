@@ -1,6 +1,5 @@
 from random import randint, randrange, random, seed
 from math import sqrt
-import numpy as np
 
 
 class InputNeuron:
