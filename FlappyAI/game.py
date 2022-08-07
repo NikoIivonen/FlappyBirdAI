@@ -261,6 +261,8 @@ while True:
                         bird_list.append(trained_bird)
                         round_timer = float('inf')
 
+                        score = 0
+
                 except:
                     show_error("Invalid configuration file")
 
