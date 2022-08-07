@@ -23,13 +23,16 @@ img_bird_flap2 = pygame.image.load("imgs/bird_flap2.png")
 img_params = pygame.image.load("imgs/params.png")
 img_load = pygame.image.load("imgs/load.png")
 img_new_training = pygame.image.load("imgs/new_training.png")
+img_mutate = pygame.image.load("imgs/mutate.png")
+img_reset = pygame.image.load("imgs/reset.png")
+
 
 PIPE_TOP_HEIGHT = 59
 
 bgx1 = 0
 bgx2 = WINDOW_WIDTH
 
-font_data = pygame.font.SysFont("Arial", 30, True)
+font_data = pygame.font.SysFont("Arial", 28, True)
 
 max_gens = 100
 gen_lifetime = 20 #seconds
@@ -56,6 +59,10 @@ class Bird:
         self.input_y = InputNeuron(uniform(-2, 2))
         self.input_ty = InputNeuron(uniform(-2, 2))
         self.input_by = InputNeuron(uniform(-2, 2))
+
+        self.init_w1 = self.input_y.weight
+        self.init_w2 = self.input_ty.weight
+        self.init_w3 = self.input_by.weight
 
         self.output = OutputNeuron()
 
@@ -117,19 +124,29 @@ class Bird:
         if self.output.get_output() >= 0.5:
             self.init_jump()
 
-    def offsprings(self):
+    def weight_sign(self):
+        return choice([-1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
 
-        def weight_sign():
-            return choice([-1,1,1,1,1,1,1,1,1,1])
+    def reset_weights(self):
+        self.input_y.weight = self.init_w1
+        self.input_ty.weight = self.init_w2
+        self.input_by.weight = self.init_w3
+
+    def mutate_weights(self):
+        self.input_y.weight *= uniform(0.95, 1.05) * self.weight_sign()
+        self.input_ty.weight *= uniform(0.95, 1.05) * self.weight_sign()
+        self.input_by.weight *= uniform(0.95, 1.05) * self.weight_sign()
+
+    def offsprings(self):
 
         children = []
 
         amount = floor(gen_size / (gen_size * pick_rate/100))
 
         for _ in range(amount):
-            yw = self.input_y.weight * uniform(0.95, 1.05) * weight_sign()
-            tyw = self.input_ty.weight * uniform(0.95, 1.05) * weight_sign()
-            byw = self.input_by.weight * uniform(0.95, 1.05) * weight_sign()
+            yw = self.input_y.weight * uniform(0.95, 1.05) * self.weight_sign()
+            tyw = self.input_ty.weight * uniform(0.95, 1.05) * self.weight_sign()
+            byw = self.input_by.weight * uniform(0.95, 1.05) * self.weight_sign()
 
             input_y = InputNeuron(yw)
             input_ty = InputNeuron(tyw)
@@ -175,7 +192,7 @@ class Pipe:
 
 
 def spawn_pipes():
-    height_top = randint(200, 450)
+    height_top = randint(150, 500)
     gap = 150
     height_bottom = WINDOW_HEIGHT - gap - height_top
     top_bottom = WINDOW_HEIGHT - height_bottom
@@ -205,6 +222,8 @@ round_timer = gen_lifetime * FPS
 button_params = pygame.Rect(WINDOW_WIDTH-120, 20, 110, 50)
 button_load = pygame.Rect(WINDOW_WIDTH-120, 75, 110, 50)
 button_new_training = pygame.Rect(WINDOW_WIDTH-120, 20, 110, 50)
+button_mutate = pygame.Rect(WINDOW_WIDTH-120, 75, 110, 50)
+button_reset = pygame.Rect(WINDOW_WIDTH-120, 130, 110, 50)
 
 
 def button_clicked(button):
@@ -224,6 +243,12 @@ while True:
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
             if button_clicked(button_params) and trained_bird is None:
                 max_gens, gen_size, gen_lifetime, pick_rate = edit_params(max_gens, gen_size, gen_lifetime, pick_rate)
+
+            elif button_clicked(button_mutate) and trained_bird is not None:
+                trained_bird.mutate_weights()
+
+            elif button_clicked(button_reset) and trained_bird is not None:
+                trained_bird.reset_weights()
 
             elif button_clicked(button_new_training) and trained_bird is not None:
                 trained_bird = None
@@ -256,6 +281,10 @@ while True:
                         trained_bird.input_y = InputNeuron(w1)
                         trained_bird.input_ty = InputNeuron(w2)
                         trained_bird.input_by = InputNeuron(w3)
+
+                        trained_bird.init_w1 = w1
+                        trained_bird.init_w2 = w2
+                        trained_bird.init_w3 = w3
 
                         bird_list.clear()
                         bird_list.append(trained_bird)
@@ -380,10 +409,11 @@ while True:
 
     if trained_bird is None:
         screen.blit(img_params, (button_params.x, button_params.y))
-
         screen.blit(img_load, (button_load.x, button_load.y))
     else:
         screen.blit(img_new_training, (button_new_training.x, button_new_training.y))
+        screen.blit(img_mutate, (button_mutate.x, button_mutate.y))
+        screen.blit(img_reset, (button_reset.x, button_reset.y))
 
     """TEXTS"""
 
