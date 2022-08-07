@@ -2,6 +2,8 @@ import pygame
 from random import randint, randrange, uniform, choice
 from inputNeuron import InputNeuron
 from ouputNeuron import OutputNeuron
+from parameters import edit_params
+from math import floor, ceil
 
 pygame.init()
 clock = pygame.time.Clock()
@@ -11,12 +13,14 @@ WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 500
 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+pygame.display.set_caption("Flappy Bird AI")
 
 img_bg = pygame.image.load("imgs/bg.png")
 img_pipe = pygame.image.load("imgs/pipe.png")
 img_pipe_top = pygame.image.load("imgs/pipe_top.png")
 img_bird_flap1 = pygame.image.load("imgs/bird_flap1.png")
 img_bird_flap2 = pygame.image.load("imgs/bird_flap2.png")
+img_params = pygame.image.load("imgs/params.png")
 
 PIPE_TOP_HEIGHT = 59
 
@@ -24,6 +28,11 @@ bgx1 = 0
 bgx2 = WINDOW_WIDTH
 
 font_data = pygame.font.SysFont("Arial", 30, True)
+
+max_gens = 100
+gen_lifetime = 20 #seconds
+gen_size = 100
+pick_rate = 10 #percent
 
 
 class Bird:
@@ -104,7 +113,9 @@ class Bird:
 
         children = []
 
-        for _ in range(10):
+        amount = floor(gen_size / (gen_size * pick_rate/100))
+
+        for _ in range(amount):
             yw = self.input_y.weight * uniform(0.95, 1.05) * weight_sign()
             tyw = self.input_ty.weight * uniform(0.95, 1.05) * weight_sign()
             byw = self.input_by.weight * uniform(0.95, 1.05) * weight_sign()
@@ -140,7 +151,6 @@ class Pipe:
 
     def draw(self):
         self.pipe = pygame.Rect(self.x, self.y, self.width, self.height)
-        #pygame.draw.rect(screen, (0, 0, 255), self.pipe)
 
         if self.y == 0:
             screen.blit(self.image_pipe, (self.x, self.y))
@@ -156,8 +166,8 @@ class Pipe:
 def spawn_pipes():
     height_top = randint(200, 450)
     gap = 150
-    height_bottom = 800 - gap - height_top
-    top_bottom = 800 - height_bottom
+    height_bottom = WINDOW_HEIGHT - gap - height_top
+    top_bottom = WINDOW_HEIGHT - height_bottom
 
     pipe_top = Pipe(0, height_top)
     pipe_bottom = Pipe(top_bottom, height_bottom)
@@ -172,20 +182,36 @@ first_pipes += pipe_list
 spawn_timer = 4*FPS
 
 score = 0
+top_score = 0
 
-bird_list = [Bird() for _ in range(100)]
+bird_list = [Bird() for _ in range(gen_size)]
 
 gen = 1
 
 
-round_timer_max = 20*FPS
+round_timer_max = gen_lifetime * FPS
 round_timer = round_timer_max
+
+button_params = pygame.Rect(WINDOW_WIDTH-120, 45, 100, 50)
+
+
+def button_clicked(button):
+    mx, my = pygame.mouse.get_pos()
+    if button.collidepoint(mx, my):
+        return True
+    return False
+
+
 
 while True:
 
     for e in pygame.event.get():
         if e.type == pygame.QUIT:
             exit()
+
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+            if button_clicked(button_params):
+                max_gens, gen_size, gen_lifetime, pick_rate = edit_params(max_gens, gen_size, gen_lifetime, pick_rate)
 
     screen.fill((225, 225, 225))
 
@@ -225,6 +251,8 @@ while True:
         pipe_list += first_pipes
 
         score += 1
+        if score > top_score:
+            top_score = score
 
     """SPAWN NEW PIPES"""
 
@@ -252,13 +280,13 @@ while True:
         else:
             alive -= 1
 
-    """NEW GEN"""
+    """NEW GENERATION"""
 
     round_timer -= 1
 
     if alive == 0:
 
-        round_timer_max = (20 + gen/5) * FPS
+        round_timer_max = gen_lifetime * FPS if gen < max_gens else float('inf')
 
         round_timer = round_timer_max
         spawn_timer = 4 * FPS
@@ -270,23 +298,31 @@ while True:
         gen += 1
         score = 0
 
-        winners = sorted(bird_list, key=lambda b: b.fitness, reverse=True)[:10]
+        winners = sorted(bird_list, key=lambda b: b.fitness, reverse=True)[:int(gen_size * pick_rate/100)]
         bird_list.clear()
 
         for winner in winners:
             bird_list += winner.offsprings()
 
+        #If winners produce too few offsprings
+        while len(bird_list) < gen_size:
+            bird_list.append(Bird())
+
+    """BUTTON FOR EDITING PARAMETERS"""
+
+    screen.blit(img_params, (button_params.x, button_params.y))
+
     """TEXTS"""
 
-    text_gen = font_data.render(f"GEN: {gen}", True, (0, 0, 0))
-    text_next_gen = font_data.render(f"Next gen in {round(round_timer/FPS, 1)} s", True, (0, 0, 0))
-    text_alive = font_data.render(f"Alive: {alive}", True, (0, 0, 0))
-    text_score = font_data.render(f"Score: {score}", True, (0, 0, 0))
+    text_gen = font_data.render(f"Gen: {gen}/{max_gens}", True, (230, 230, 230))
+    text_next_gen = font_data.render(f"Next gen: {round(round_timer/FPS, 1)} s", True, (230, 230, 230))
+    text_alive = font_data.render(f"Alive: {alive}", True, (230, 230, 230))
+    text_score = font_data.render(f"Top score: {top_score}", True, (230, 230, 230))
 
-    screen.blit(text_gen, (25, 25))
-    screen.blit(text_alive, (25, 75))
-    screen.blit(text_next_gen, (25, 125))
-    screen.blit(text_score, (25, 175))
+    screen.blit(text_gen, (10, 25))
+    screen.blit(text_alive, (10, 75))
+    screen.blit(text_next_gen, (175, 25))
+    screen.blit(text_score, (175, 75))
 
     pygame.display.flip()
     clock.tick(FPS)
