@@ -71,3 +71,17 @@ def edit_params(def_max_gens, def_size, def_lifetime, def_top):
     window.mainloop()
 
     return new_params
+
+
+def show_error(message):
+    window = Tk()
+    window.withdraw()
+    messagebox.showerror(title="Error", message=message)
+    window.destroy()
+
+
+def show_info(message):
+    window = Tk()
+    window.withdraw()
+    messagebox.showinfo(title="Info", message=message)
+    window.destroy()

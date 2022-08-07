@@ -2,7 +2,7 @@ import pygame
 from random import randint, randrange, uniform, choice
 from inputNeuron import InputNeuron
 from ouputNeuron import OutputNeuron
-from parameters import edit_params
+from parameters import edit_params, show_error, show_info
 from math import floor, ceil
 
 pygame.init()
@@ -21,6 +21,8 @@ img_pipe_top = pygame.image.load("imgs/pipe_top.png")
 img_bird_flap1 = pygame.image.load("imgs/bird_flap1.png")
 img_bird_flap2 = pygame.image.load("imgs/bird_flap2.png")
 img_params = pygame.image.load("imgs/params.png")
+img_load = pygame.image.load("imgs/load.png")
+img_new_training = pygame.image.load("imgs/new_training.png")
 
 PIPE_TOP_HEIGHT = 59
 
@@ -39,7 +41,7 @@ class Bird:
 
     def __init__(self):
         self.x = BIRD_X
-        self.y = 400
+        self.y = WINDOW_HEIGHT/2
         self.width = 35
         self.acc = 0.02
         self.v = 1.5
@@ -56,6 +58,15 @@ class Bird:
         self.input_by = InputNeuron(uniform(-2, 2))
 
         self.output = OutputNeuron()
+
+    def init_start(self):
+        self.y = WINDOW_HEIGHT/2
+        self.acc = 0.02
+        self.v = 1.5
+        self.jumping = False
+        self.jump_time = 1*60
+        self.is_alive = True
+        self.anim_state = 0
 
     def animate(self):
         self.anim_state += 0.2
@@ -189,10 +200,11 @@ bird_list = [Bird() for _ in range(gen_size)]
 gen = 1
 
 
-round_timer_max = gen_lifetime * FPS
-round_timer = round_timer_max
+round_timer = gen_lifetime * FPS
 
-button_params = pygame.Rect(WINDOW_WIDTH-120, 45, 100, 50)
+button_params = pygame.Rect(WINDOW_WIDTH-120, 20, 110, 50)
+button_load = pygame.Rect(WINDOW_WIDTH-120, 75, 110, 50)
+button_new_training = pygame.Rect(WINDOW_WIDTH-120, 20, 110, 50)
 
 
 def button_clicked(button):
@@ -201,7 +213,7 @@ def button_clicked(button):
         return True
     return False
 
-
+trained_bird = None
 
 while True:
 
@@ -210,8 +222,47 @@ while True:
             exit()
 
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-            if button_clicked(button_params):
+            if button_clicked(button_params) and trained_bird is None:
                 max_gens, gen_size, gen_lifetime, pick_rate = edit_params(max_gens, gen_size, gen_lifetime, pick_rate)
+
+            elif button_clicked(button_new_training) and trained_bird is not None:
+                trained_bird = None
+
+                FPS = 60
+
+                pipe_list = spawn_pipes()
+                first_pipes = []
+                first_pipes += pipe_list
+                spawn_timer = 4 * FPS
+
+                score = 0
+                top_score = 0
+
+                bird_list = [Bird() for _ in range(gen_size)]
+
+                gen = 1
+
+                round_timer = gen_lifetime * FPS
+
+            elif button_clicked(button_load) and trained_bird is None:
+                try:
+                    with open("trained_weights.txt", "r") as file:
+                        lines = file.readlines()
+                        w1 = float(lines[0][3:-1]) #newline char
+                        w2 = float(lines[1][3:-1]) #newline char
+                        w3 = float(lines[2][3:])
+
+                        trained_bird = Bird()
+                        trained_bird.input_y = InputNeuron(w1)
+                        trained_bird.input_ty = InputNeuron(w2)
+                        trained_bird.input_by = InputNeuron(w3)
+
+                        bird_list.clear()
+                        bird_list.append(trained_bird)
+                        round_timer = float('inf')
+
+                except:
+                    show_error("Invalid configuration file")
 
     screen.fill((225, 225, 225))
 
@@ -270,7 +321,7 @@ while True:
 
     for bird in bird_list:
 
-        if bird.is_alive and bird.fitness < round_timer_max:
+        if bird.is_alive:
             bird.draw()
             bird.fall()
 
@@ -284,45 +335,70 @@ while True:
 
     round_timer -= 1
 
-    if alive == 0:
+    if alive == 0 or round_timer <= 0:
 
-        round_timer_max = gen_lifetime * FPS if gen < max_gens else float('inf')
-
-        round_timer = round_timer_max
         spawn_timer = 4 * FPS
 
         pipe_list = spawn_pipes()
         first_pipes.clear()
         first_pipes += pipe_list
-
-        gen += 1
         score = 0
 
-        winners = sorted(bird_list, key=lambda b: b.fitness, reverse=True)[:int(gen_size * pick_rate/100)]
-        bird_list.clear()
+        if trained_bird is None:
 
-        for winner in winners:
-            bird_list += winner.offsprings()
+            round_timer = gen_lifetime * FPS
 
-        #If winners produce too few offsprings
-        while len(bird_list) < gen_size:
-            bird_list.append(Bird())
+            gen += 1
 
-    """BUTTON FOR EDITING PARAMETERS"""
+            winners = sorted(bird_list, key=lambda b: b.fitness, reverse=True)[:int(gen_size * pick_rate/100)]
+            bird_list.clear()
 
-    screen.blit(img_params, (button_params.x, button_params.y))
+            """IF THE TRAINING IS COMPLETE, UPDATE THE WEIGHTS IN THE SAVE FILE"""
+
+            if gen == max_gens + 1:
+                with open("trained_weights.txt", "w") as file:
+                    best = winners[0]
+                    file.write(f"w1:{best.input_y.weight}\n")
+                    file.write(f"w2:{best.input_ty.weight}\n")
+                    file.write(f"w3:{best.input_by.weight}")
+
+                show_info("Training complete!\nLoading a trained bird now available.")
+
+            for winner in winners:
+                bird_list += winner.offsprings()
+
+            #If winners produce too few offsprings
+            while len(bird_list) < gen_size:
+                bird_list.append(Bird())
+
+        else:
+            trained_bird.init_start()
+
+    """BUTTONS"""
+
+    if trained_bird is None:
+        screen.blit(img_params, (button_params.x, button_params.y))
+
+        screen.blit(img_load, (button_load.x, button_load.y))
+    else:
+        screen.blit(img_new_training, (button_new_training.x, button_new_training.y))
 
     """TEXTS"""
 
     text_gen = font_data.render(f"Gen: {gen}/{max_gens}", True, (230, 230, 230))
     text_next_gen = font_data.render(f"Next gen: {round(round_timer/FPS, 1)} s", True, (230, 230, 230))
     text_alive = font_data.render(f"Alive: {alive}", True, (230, 230, 230))
-    text_score = font_data.render(f"Top score: {top_score}", True, (230, 230, 230))
+    text_top_score = font_data.render(f"Top score: {top_score}", True, (230, 230, 230))
+    text_score = font_data.render(f"Score: {score}", True, (230, 230, 230))
 
-    screen.blit(text_gen, (10, 25))
-    screen.blit(text_alive, (10, 75))
-    screen.blit(text_next_gen, (175, 25))
-    screen.blit(text_score, (175, 75))
+    if trained_bird is None:
+        screen.blit(text_gen, (10, 25))
+        screen.blit(text_alive, (10, 75))
+        screen.blit(text_next_gen, (175, 25))
+        screen.blit(text_top_score, (175, 75))
+    else:
+        screen.blit(text_score, (10, 25))
+        screen.blit(text_top_score, (10, 75))
 
     pygame.display.flip()
     clock.tick(FPS)
